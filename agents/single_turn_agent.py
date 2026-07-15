@@ -1,0 +1,53 @@
+"""A minimal single-turn agent: one question in, one answer out, no memory.
+
+Split into two @observe-traced sub-steps (building the prompt, calling the
+LLM) plus an outer traced step for the whole agent. There's nothing to
+configure to make @observe "turn on" -- the decorators pass calls straight
+through in normal use, and only matter when a test drives the function
+through a traced evaluation (see tests/test_tracing.py).
+"""
+
+import os
+
+from deepeval.tracing import observe, update_current_span, update_current_trace
+from openai import OpenAI
+
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+SYSTEM_PROMPT = (
+    "You are a concise assistant for 'Trailhead Travel', a fictional travel "
+    "booking company. Answer travel-related questions (flights, hotels, "
+    "baggage, visas) in 2-3 sentences. If a question is unrelated to travel, "
+    "politely say it's outside what you can help with."
+)
+
+
+@observe(type="tool", name="build_prompt")
+def build_messages(question: str) -> list[dict]:
+    """Assemble the system + user messages sent to the LLM."""
+    return [
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "user", "content": question},
+    ]
+
+
+@observe(type="llm", name="call_llm")
+def call_llm(messages: list[dict], model: str = "gpt-4o-mini") -> str:
+    """Send the prepared messages to the LLM and return its reply."""
+    response = client.chat.completions.create(model=model, messages=messages)
+    answer = response.choices[0].message.content
+    update_current_span(output=answer)
+    return answer
+
+
+@observe(type="agent", name="single_turn_agent")
+def answer_query(question: str, model: str = "gpt-4o-mini") -> str:
+    """Send a single question to the LLM and return its one-shot answer."""
+    messages = build_messages(question)
+    answer = call_llm(messages, model)
+    update_current_trace(input=question, output=answer)
+    return answer
+
+
+if __name__ == "__main__":
+    print(answer_query("What's the checked baggage limit for economy flights?"))
