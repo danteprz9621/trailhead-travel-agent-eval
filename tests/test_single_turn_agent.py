@@ -8,25 +8,27 @@ Docs: https://docs.confident-ai.com/docs/getting-started
 """
 
 import pytest
+import deepeval
 from deepeval import evaluate
 from deepeval.metrics import AnswerRelevancyMetric, GEval
+from deepeval.models import GeminiModel
 from deepeval.test_case import LLMTestCase, LLMTestCaseParams
 
 from agents.single_turn_agent import answer_query
-
+deepeval.config.throughputs = 1
 
 # 1. Create an AnswerRelevancyMetric instance with a threshold of 0.7
-
-answer_relevancy = AnswerRelevancyMetric(threshold=0.7, model="gpt-4o")
-
+model = GeminiModel("gemini-2.5-flash")
+answer_relevancy = AnswerRelevancyMetric(threshold=0.7, model=model)
 
 # 2. Create a custom GEval metric called "Correctness" that checks whether
 #    the actual_output correctly answers the input, using
 #    evaluation_params=[LLMTestCaseParams.INPUT, LLMTestCaseParams.ACTUAL_OUTPUT]
 
 correctness = GEval(
+    name="correctness",
     criteria = ("Determine whether the actual output conveys the same factual information as expected output."),
-    model = "gpt-4o",
+    model = model,
     threshold = 0.8,
     evaluation_params = [
         LLMTestCaseParams.INPUT,
@@ -48,7 +50,7 @@ def test_single_turn_answers_relevantly():
         input = input,
         actual_output=actual_output
     )
-    evaluate(test_cases=[test_case], metrics=[correctness, answer_relevancy], model="gpt-4o")
+    evaluate(test_cases=[test_case], metrics=[correctness, answer_relevancy])
 
 
 # 4. Write test_single_turn_handles_out_of_scope_question():
@@ -63,7 +65,7 @@ def test_single_turn_handles_out_of_scope_question():
         input = input,
         actual_output=actual_output
     )
-    evaluate(test_cases=[test_case], metrics=[answer_relevancy], model="gpt-4o")
+    evaluate(test_cases=[test_case], metrics=[answer_relevancy])
 
 
 # 5. Parametrize test_single_turn_answers_relevantly with
@@ -80,4 +82,4 @@ def test_single_turn_answers_relevantly(input):
         input=input,
         actual_output=actual_output
     )
-    evaluate(test_cases=[test_case], metrics=[answer_relevancy], model="gpt-4o")
+    evaluate(test_cases=[test_case], metrics=[answer_relevancy])

@@ -9,11 +9,11 @@ further.
 import os
 from glob import glob
 
-from openai import OpenAI
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
+from google import genai
 
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+client = genai.Client()
 
 KB_DIR = os.path.join(os.path.dirname(__file__), "..", "data", "knowledge_base")
 
@@ -43,7 +43,7 @@ def retrieve(question: str, top_k: int = 2) -> list[str]:
     return [doc for doc, _ in ranked[:top_k]]
 
 
-def ask(question: str, model: str = "gpt-4o-mini") -> dict:
+def ask(question: str, model: str = "gemini-2.5-flash") -> dict:
     """Retrieve relevant context, then answer the question grounded in it.
 
     Returns a dict with both "answer" and "retrieval_context" so tests can

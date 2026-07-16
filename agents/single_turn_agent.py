@@ -10,9 +10,10 @@ through a traced evaluation (see tests/test_tracing.py).
 import os
 
 from deepeval.tracing import observe, update_current_span, update_current_trace
-from openai import OpenAI
+from google import genai
+from google.genai import types
 
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+client = genai.Client()
 
 SYSTEM_PROMPT = (
     "You are a concise assistant for 'Trailhead Travel', a fictional travel "
@@ -32,16 +33,41 @@ def build_messages(question: str) -> list[dict]:
 
 
 @observe(type="llm", name="call_llm")
-def call_llm(messages: list[dict], model: str = "gpt-4o-mini") -> str:
-    """Send the prepared messages to the LLM and return its reply."""
-    response = client.chat.completions.create(model=model, messages=messages)
-    answer = response.choices[0].message.content
-    update_current_span(output=answer)
-    return answer
+def call_llm(messages: list[dict], model: str = "gemini-2.5-flash") -> str:
+    """Send the prepared messages to the Gemini LLM and return its reply."""
+    
+    # 1. Extract the system instruction if it exists in your list
+    system_instruction = None
+    chat_contents = []
+    
+    for msg in messages:
+        if msg.get("role") == "system":
+            system_instruction = msg.get("content")
+        else:
+            # Format user/model turns for Gemini
+            chat_contents.append(
+                types.Content(
+                    role=msg.get("role"),
+                    parts=[types.Part.from_text(text=msg.get("content"))]
+                )
+            )
 
+    # 2. Build the configuration payload
+    config = types.GenerateContentConfig(
+        system_instruction=system_instruction
+    )
+    
+    # 3. Call Google's generate_content API
+    response = client.models.generate_content(
+        model=model,
+        contents=chat_contents,
+        config=config
+    )
+    
+    return response.text
 
 @observe(type="agent", name="single_turn_agent")
-def answer_query(question: str, model: str = "gpt-4o-mini") -> str:
+def answer_query(question: str, model: str = "gemini-2.5-flash") -> str:
     """Send a single question to the LLM and return its one-shot answer."""
     messages = build_messages(question)
     answer = call_llm(messages, model)

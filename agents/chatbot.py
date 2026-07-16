@@ -2,9 +2,9 @@
 
 import os
 
-from openai import OpenAI
+from google import genai
 
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+client = genai.Client()
 
 DEFAULT_ROLE = (
     "You are 'Sam', a support chatbot for Trailhead Travel. You help "
@@ -17,7 +17,7 @@ DEFAULT_ROLE = (
 class SupportChatbot:
     """Stateful chatbot: call .send() repeatedly to hold a conversation."""
 
-    def __init__(self, chatbot_role: str = DEFAULT_ROLE, model: str = "gpt-4o-mini"):
+    def __init__(self, chatbot_role: str = DEFAULT_ROLE, model: str = "gemini-2.5-flash"):
         self.chatbot_role = chatbot_role
         self.model = model
         self.history = [{"role": "system", "content": chatbot_role}]
