@@ -9,11 +9,8 @@ through a traced evaluation (see tests/test_tracing.py).
 
 import os
 
+import ollama
 from deepeval.tracing import observe, update_current_span, update_current_trace
-from google import genai
-from google.genai import types
-
-client = genai.Client()
 
 SYSTEM_PROMPT = (
     "You are a concise assistant for 'Trailhead Travel', a fictional travel "
@@ -33,41 +30,14 @@ def build_messages(question: str) -> list[dict]:
 
 
 @observe(type="llm", name="call_llm")
-def call_llm(messages: list[dict], model: str = "gemini-2.5-flash") -> str:
-    """Send the prepared messages to the Gemini LLM and return its reply."""
-    
-    # 1. Extract the system instruction if it exists in your list
-    system_instruction = None
-    chat_contents = []
-    
-    for msg in messages:
-        if msg.get("role") == "system":
-            system_instruction = msg.get("content")
-        else:
-            # Format user/model turns for Gemini
-            chat_contents.append(
-                types.Content(
-                    role=msg.get("role"),
-                    parts=[types.Part.from_text(text=msg.get("content"))]
-                )
-            )
+def call_llm(messages: list[dict], model: str = "qwen2.5-coder:7b") -> str:
+    """Send the prepared messages to the local Ollama LLM and return its reply."""
+    response = ollama.chat(model=model, messages=messages)
+    return response["message"]["content"]
 
-    # 2. Build the configuration payload
-    config = types.GenerateContentConfig(
-        system_instruction=system_instruction
-    )
-    
-    # 3. Call Google's generate_content API
-    response = client.models.generate_content(
-        model=model,
-        contents=chat_contents,
-        config=config
-    )
-    
-    return response.text
 
 @observe(type="agent", name="single_turn_agent")
-def answer_query(question: str, model: str = "gemini-2.5-flash") -> str:
+def answer_query(question: str, model: str = "qwen2.5-coder:7b") -> str:
     """Send a single question to the LLM and return its one-shot answer."""
     messages = build_messages(question)
     answer = call_llm(messages, model)

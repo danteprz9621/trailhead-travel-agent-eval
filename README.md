@@ -4,6 +4,12 @@ Capstone project for a DeepEval course. Three tiny "Trailhead Travel" agents
 are provided as fixtures to test — the actual testing code is left for you
 to write, guided by comments describing each step (DataCamp-exercise style).
 
+Runs fully local and free where set up: `single_turn_agent.py` and its test
+suite use local models served by [Ollama](https://ollama.com) for both the
+agent's own responses and the DeepEval judge — no API keys, no rate limits,
+no cost. See [Running fully local with Ollama](#running-fully-local-with-ollama)
+below.
+
 ## Project structure
 
 ```
@@ -34,9 +40,13 @@ cd deepeval-capstone
 python -m venv .venv
 .venv\Scripts\activate        # Windows
 pip install -r requirements.txt
-
-copy .env.example .env         # then paste your real OPENAI_API_KEY into .env
 ```
+
+`chatbot.py` and `rag_agent.py` call Gemini directly, so they need a
+`GOOGLE_API_KEY` set as a real environment variable (see `.env.example` for
+the name — the agent code reads `os.getenv(...)` directly, it doesn't load
+`.env` files itself). `single_turn_agent.py` needs no API key at all; see
+below.
 
 ### The knowledge base
 
@@ -63,6 +73,50 @@ python agents/chatbot.py
 python agents/rag_agent.py
 ```
 
+## Running fully local with Ollama
+
+`single_turn_agent.py` and `tests/test_single_turn_agent.py` run entirely on
+local models via [Ollama](https://ollama.com) — no OpenAI/Gemini API key
+needed for that pair, and no rate limits or per-request cost. This came out
+of hitting two real problems while writing the tests:
+
+1. **Free-tier rate limits.** Cloud judge models (and the agent's own calls)
+   burned through free-tier quotas fast — Gemini's free tier caps
+   `gemini-2.5-flash` at just 20 requests *per day*, which a handful of
+   pytest runs exhausts immediately.
+2. **Self-evaluation bias.** Using the same model as both the agent
+   generating an answer and the judge scoring it risks the judge being blind
+   to that model's own failure patterns.
+
+The fix: two different local models, one per role, both served by Ollama on
+`http://localhost:11434`:
+
+- **Agent** (`agents/single_turn_agent.py`) generates answers with
+  `qwen2.5-coder:7b`.
+- **Judge** (`tests/test_single_turn_agent.py`) scores those answers with a
+  *different* model, `llama3.1:8b`, via `deepeval`'s `OllamaModel`:
+
+  ```python
+  from deepeval.models import OllamaModel
+
+  judge_model = OllamaModel(model="llama3.1:8b", base_url="http://localhost:11434")
+  answer_relevancy = AnswerRelevancyMetric(model=judge_model)
+  ```
+
+To run it yourself: install [Ollama](https://ollama.com), then pull both
+models and make sure the Ollama server is running (it typically runs as a
+background service after install):
+
+```bash
+ollama pull qwen2.5-coder:7b
+ollama pull llama3.1:8b
+```
+
+`chatbot.py` and `rag_agent.py` still call Gemini directly (`google-genai`)
+for their generation, so they'll need a `GOOGLE_API_KEY` and are still
+subject to that same daily free-tier cap — the same agent/judge Ollama split
+can be applied to them if you hit it.
+
 ## How the test files work
 
 Each file under `tests/` is a **skeleton**, not a finished test suite. Every
@@ -87,11 +141,9 @@ pytest tests/ -v
 deepeval test run tests/
 ```
 
-Some metrics (e.g. `GEval`, `AnswerRelevancyMetric`) use an LLM as judge and
-call the OpenAI API — expect these tests to cost a small amount and take a
-few seconds each.
-
-## Publishing to GitHub
-
-Once you've filled in the tests, just ask and a git repo can be initialized
-and pushed to GitHub for you (you'll need the `gh` CLI authenticated).
+Every metric (e.g. `GEval`, `AnswerRelevancyMetric`) uses an LLM as judge.
+`test_single_turn_agent.py` points its judge at a local Ollama model (see
+above), so those runs are free — expect roughly 15-70s total depending on
+whether Ollama has to swap models in/out of VRAM. For test files you write
+against a cloud judge model instead, expect a small per-run cost and a few
+seconds per test case.
