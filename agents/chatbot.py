@@ -2,9 +2,7 @@
 
 import os
 
-from google import genai
-
-client = genai.Client()
+import ollama
 
 DEFAULT_ROLE = (
     "You are 'Sam', a support chatbot for Trailhead Travel. You help "
@@ -17,7 +15,7 @@ DEFAULT_ROLE = (
 class SupportChatbot:
     """Stateful chatbot: call .send() repeatedly to hold a conversation."""
 
-    def __init__(self, chatbot_role: str = DEFAULT_ROLE, model: str = "gemini-2.5-flash"):
+    def __init__(self, chatbot_role: str = DEFAULT_ROLE, model: str = "qwen2.5-coder:7b"):
         self.chatbot_role = chatbot_role
         self.model = model
         self.history = [{"role": "system", "content": chatbot_role}]
@@ -25,11 +23,8 @@ class SupportChatbot:
     def send(self, user_message: str) -> str:
         """Send one user message, append it to history, and return the reply."""
         self.history.append({"role": "user", "content": user_message})
-        response = client.chat.completions.create(
-            model=self.model,
-            messages=self.history,
-        )
-        reply = response.choices[0].message.content
+        response = ollama.chat(model=self.model, messages=self.history)
+        reply = response["message"]["content"]
         self.history.append({"role": "assistant", "content": reply})
         return reply
 

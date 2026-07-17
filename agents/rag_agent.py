@@ -9,11 +9,9 @@ further.
 import os
 from glob import glob
 
+import ollama
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
-from google import genai
-
-client = genai.Client()
 
 KB_DIR = os.path.join(os.path.dirname(__file__), "..", "data", "knowledge_base")
 
@@ -43,7 +41,7 @@ def retrieve(question: str, top_k: int = 2) -> list[str]:
     return [doc for doc, _ in ranked[:top_k]]
 
 
-def ask(question: str, model: str = "gemini-2.5-flash") -> dict:
+def ask(question: str, model: str = "qwen2.5-coder:7b") -> dict:
     """Retrieve relevant context, then answer the question grounded in it.
 
     Returns a dict with both "answer" and "retrieval_context" so tests can
@@ -51,7 +49,7 @@ def ask(question: str, model: str = "gemini-2.5-flash") -> dict:
     """
     context_chunks = retrieve(question)
     context_block = "\n\n---\n\n".join(context_chunks)
-    response = client.chat.completions.create(
+    response = ollama.chat(
         model=model,
         messages=[
             {"role": "system", "content": SYSTEM_PROMPT},
@@ -62,7 +60,7 @@ def ask(question: str, model: str = "gemini-2.5-flash") -> dict:
         ],
     )
     return {
-        "answer": response.choices[0].message.content,
+        "answer": response["message"]["content"],
         "retrieval_context": context_chunks,
     }
 
