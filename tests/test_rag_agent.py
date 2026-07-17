@@ -1,50 +1,43 @@
 """
-DeepEval test skeleton: RAG Agent
 Agent under test: agents/rag_agent.py
-
-RAG-specific metrics need `retrieval_context` (what was retrieved) in
-addition to input/actual_output/expected_output.
-Docs: https://docs.confident-ai.com/docs/metrics-contextual-precision
 """
-
-import pytest
-from deepeval import assert_test
+from deepeval import evaluate
 from deepeval.metrics import (
     FaithfulnessMetric,
     ContextualPrecisionMetric,
     ContextualRecallMetric,
-    ContextualRelevancyMetric,
     HallucinationMetric,
 )
 from deepeval.test_case import LLMTestCase
-
+from deepeval.models import OllamaModel
 from agents.rag_agent import ask
 
 
-# 1. Write a helper get_test_case(question, expected_output=None) that
-#    calls ask() (check what it returns in rag_agent.py) and builds an
-#    LLMTestCase with input, actual_output, retrieval_context, and
-#    expected_output
+model = OllamaModel(model="llama3.1:8b", base_url="http://localhost:11434")
+faithfulness = FaithfulnessMetric(threshold=0.8, model=model)
+contextual_precision = ContextualPrecisionMetric(threshold=0.7, model=model)
+contextual_recall = ContextualRecallMetric(threshold=0.7, model=model)
+hallucination = HallucinationMetric(threshold=0.8, model=model)
 
+booking_question = "What's the deadline for route changes on flights?"
+unanswerable_question = "Am I allowed to make changes on my name in the reservation using kanjis?"
 
-# 2. Write test_rag_answer_is_faithful_to_context():
-#    - Pick a question you know data/knowledge_base/ can answer
-#    - Build the test case
-#    - Assert with FaithfulnessMetric that the answer doesn't contradict
-#      the retrieved context
+def get_test_case(question: str, expected_output=None) -> LLMTestCase:
+    actual_output, retrieval_context = ask(input)
+    test_case = LLMTestCase(
+        input=question, 
+        expected_output=expected_output, 
+        retrieval_context=retrieval_context, 
+        actual_output=actual_output)
+    return test_case
 
+def test_rag_answer_is_faithful_to_context():
+    test_case = get_test_case(booking_question)
+    evaluate(test_cases=[test_case], metrics=[faithfulness])
 
-# 3. Write test_rag_retrieval_is_precise_and_complete():
-#    - Reuse/build a test case with a known expected_output
-#    - Assert with ContextualPrecisionMetric AND ContextualRecallMetric
-#      (hint: assert_test takes a list of metrics)
-
-
-# 4. Write test_rag_no_hallucination_on_unanswerable_question():
-#    - Ask a question the knowledge base can NOT answer
-#    - Decide what the agent SHOULD do (say "I don't know" vs guessing)
-#    - Assert with HallucinationMetric using retrieval_context as context
-
-
-# 5. (Stretch) Parametrize step 2 across each .txt file in
-#    data/knowledge_base/ with one question per document
+def test_rag_retrieval_is_precise_and_complete():
+    test_case = get_test_case(booking_question)
+    evaluate(test_cases=[test_case], metrics=[contextual_precision, contextual_recall])
+def test_rag_no_hallucination_on_unanswerable_question():
+    test_case = get_test_case(unanswerable_question, "I don't know, let me search information on that specific topic")
+    evaluate(test_cases=[test_case], metrics=[hallucination])

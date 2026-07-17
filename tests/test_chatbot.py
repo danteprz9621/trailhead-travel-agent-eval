@@ -1,50 +1,82 @@
 """
-DeepEval test skeleton: Multi-turn Chatbot
 Agent under test: agents/chatbot.py
-
-DeepEval models multi-turn conversations with ConversationalTestCase + Turn.
-Docs: https://docs.confident-ai.com/docs/multiturn-introduction
 """
 
 import pytest
-from deepeval import assert_test
-from deepeval.test_case import ConversationalTestCase, Turn
+
+from deepeval import evaluate
+from deepeval.test_case import ConversationalTestCase, Turn, MultiTurnParams
+from deepeval.models import OllamaModel
 from deepeval.metrics import (
     KnowledgeRetentionMetric,
     ConversationCompletenessMetric,
     RoleAdherenceMetric,
+    ConversationalGEval
 )
 
 from agents.chatbot import SupportChatbot
 
+model = OllamaModel(model="llama3.1:8b", base_url="http://localhost:11434")
+knowledge_retention = KnowledgeRetentionMetric(threshold=0.6, model=model)
+conversation_completeness = ConversationCompletenessMetric(threshold=0.8, model=model)
+role_adherence = RoleAdherenceMetric(threshold=0.7, model=model)
 
-# 1. Write a helper function simulate_conversation(chatbot, user_messages)
-#    that drives `chatbot` through a scripted list of user messages and
-#    returns a list of Turn objects (role="user" / role="assistant") built
-#    from the REAL inputs/outputs -- not hardcoded strings
+correctness = ConversationalGEval(
+    name="correctness",
+    criteria="Did the chatbot resolve the issue?",
+    model=model,
+    threshold=0.8,
+    evaluation_params=[
+        MultiTurnParams.ROLE,
+        MultiTurnParams.CONTENT
+    ]
+)
+
+name_convo = [
+    "Hi, my name is Michael Scott. I want to know about the baggage policy.",
+    "How about the refund policy?",
+    "Can you tell me my name again?"
+]
+
+cancel_order_convo = [
+    "Hi, my name is Michael Scott. I want to know about the cancellation policy.",
+    "I want to cancel my order"
+]
+
+off_topic_convo = [
+    "Hey Sam, it's been too long since we last spoke. Wanna hang out tomorrow?",
+    "Are you sure you are Sam, my friend from pilates?"
+]
+
+def simulate_conversation(chatbot: SupportChatbot, user_msgs: list[str]) -> Turn:
+    turns = []
+    for user_msg in user_msgs:
+        reply = chatbot.send(user_msg)
+        turns.append(Turn(role="user", content=user_msg))
+        turns.append(Turn(role="assistant", content=reply))
+
+def test_chatbot_retains_knowledge_across_turns():
+    chatbot = SupportChatbot()
+    turns = simulate_conversation(chatbot, name_convo)
+    test_case = ConversationalTestCase(turns=turns)
+    evaluate(test_cases=[test_case], metrics=[knowledge_retention])
+
+def test_chatbot_completes_the_converstation():
+    chatbot = SupportChatbot()
+    turns = simulate_conversation(chatbot, cancel_order_convo)
+    test_case = ConversationalTestCase(turns=turns)
+    evaluate(test_cases=[test_case], metrics=[conversation_completeness])
 
 
-# 2. Write test_chatbot_retains_knowledge_across_turns():
-#    - Instantiate SupportChatbot
-#    - Script a conversation where the user gives a fact early on (e.g.
-#      their name or order number) and asks the bot to recall it later
-#    - Build the Turns using your helper from step 1
-#    - Wrap them in a ConversationalTestCase
-#    - Run assert_test() with a KnowledgeRetentionMetric
+def test_chatbot_stays_in_role():
+    chatbot = SupportChatbot()
+    turns = simulate_conversation(chatbot, off_topic_convo)
+    test_case = ConversationalTestCase(turns=turns)
+    evaluate(test_cases=[test_case], metrics=[])
 
 
-# 3. Write test_chatbot_completes_the_conversation():
-#    - Script a conversation with a clear user goal
-#      (e.g. "I want to cancel my order")
-#    - Assert with ConversationCompletenessMetric that the goal got resolved
-
-
-# 4. Write test_chatbot_stays_in_role():
-#    - Try to get the chatbot to break character or go off-topic
-#    - Pass a chatbot_role string describing Sam's intended persona into
-#      your ConversationalTestCase
-#    - Assert with RoleAdherenceMetric that it stayed on-role
-
-
-# 5. (Stretch) Parametrize step 2 or 3 over multiple scripted conversations
-#    using pytest.mark.parametrize
+def test_chatbot_correctness_cancellation():
+    chatbot = SupportChatbot()
+    turns = simulate_conversation(chatbot, cancel_order_convo)
+    test_case = ConversationalTestCase(turns=turns)
+    evaluate(test_cases=[test_case], metrics=[correctness])

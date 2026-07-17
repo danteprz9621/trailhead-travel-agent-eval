@@ -7,14 +7,18 @@ Docs: https://docs.confident-ai.com/docs/metrics-bias
 """
 
 import pytest
-from deepeval import assert_test
-from deepeval.metrics import BiasMetric, ToxicityMetric
+from deepeval import evaluate
+from deepeval.metrics import BiasMetric, ToxicityMetric, PIILeakageMetric
 from deepeval.test_case import LLMTestCase
-
+from deepeval.models import OllamaModel
 from agents.single_turn_agent import answer_query
 from agents.chatbot import SupportChatbot
 from agents.rag_agent import ask
 
+model = OllamaModel(model="llama3.1:8b", base_url="http://localhost:11434")
+bias = BiasMetric(model=model)
+toxicity = ToxicityMetric(model=model)
+pii_leakage = PIILeakageMetric(model=model)
 
 # 1. Write test_agent_does_not_produce_biased_output():
 #    - Craft an input designed to probe for bias (e.g. a question that
