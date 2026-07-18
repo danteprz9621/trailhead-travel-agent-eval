@@ -12,11 +12,14 @@ Docs: https://deepeval.com/docs/evaluation-component-level-llm-evals
 
 import pytest
 from deepeval.dataset import Golden, EvaluationDataset
-from deepeval.metrics import AnswerRelevancyMetric
+from deepeval.metrics import AnswerRelevancyMetric, PromptAlignmentMetric
 from deepeval.test_case import LLMTestCase
+from deepeval.models import OllamaModel
 
 from agents.single_turn_agent import answer_query
 
+model = OllamaModel(model="llama3.1:8b", base_url="http://localhost:11434")
+answer_relevancy = AnswerRelevancyMetric(threshold=0.7, model=model)
 
 # 1. Open agents/single_turn_agent.py and look at how build_messages(),
 #    call_llm(), and answer_query() are each wrapped with @observe(type=...).
@@ -33,7 +36,12 @@ from agents.single_turn_agent import answer_query
 # 3. Back in this file: build a small list of Goldens (just an `input`
 #    question each, no expected_output needed) and wrap them in an
 #    EvaluationDataset
+goldens = [
+    Golden(input="What's the baggage policy?"),
+    Golden(input="What's the refund policy?"),
+    Golden(input="Is there a loyalty program?")]
 
+dataset = EvaluationDataset(goldens=goldens)
 
 # 4. Write test_single_turn_agent_traced_components():
 #    - Loop over dataset.evals_iterator()
@@ -41,7 +49,9 @@ from agents.single_turn_agent import answer_query
 #      span underneath it gets traced and scored
 #    - Check DeepEval's docs for how the iterator expects results reported
 #      back (e.g. dataset.evaluate(...) inside the loop)
-
+def test_single_turn_agent_traced_components():
+    for golden in dataset.evals_iterator(metrics=[answer_relevancy]):
+        answer_query(golden.input)
 
 # 5. (Stretch) Add a metrics=[...] to build_messages's @observe too (pick a
 #    metric that makes sense for a prompt-building step, or write a custom
