@@ -1,12 +1,13 @@
-# DeepEval Capstone: Testing a Single-Turn Agent, a Chatbot, and a RAG Agent
+# DeepEval Practice Project: Testing a Single-Turn Agent, a Chatbot, and a RAG Agent
 
-Capstone project for a DeepEval course. Three tiny "Trailhead Travel" agents
-are provided as fixtures to test. `test_single_turn_agent.py`, `test_chatbot.py`,
-`test_rag_agent.py`, and `test_safety.py` are written; `test_dataset_eval.py`
-and `test_tracing.py` are still skeletons — see
-[How the test files work](#how-the-test-files-work) below.
+A practice project for testing LLM-backed agents with
+[DeepEval](https://deepeval.com). Three tiny "Trailhead Travel" agents (a
+single-turn Q&A agent, a multi-turn chatbot, and a RAG agent) act as fixtures,
+with a DeepEval test suite covering core metrics, conversational metrics,
+RAG metrics, safety/red-teaming, dataset-based evaluation with synthetic
+data, and component-level tracing.
 
-Runs fully local and free: all three agents and their judge models are
+Runs fully local and free: every agent and every judge/embedder model is
 served by [Ollama](https://ollama.com) — no API keys, no rate limits, no
 cost. See [Running fully local with Ollama](#running-fully-local-with-ollama)
 below.
@@ -43,10 +44,10 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-No API key is required for any agent right now — all three run on local
-Ollama models (see below). `.env.example` is currently unused/vestigial;
-it's there as a placeholder if a future test file (e.g. `test_dataset_eval.py`)
-ends up needing a cloud provider key.
+No API key is required anywhere in this project — every agent and every
+judge/embedder model runs locally via Ollama (see below). `.env.example` is
+unused/vestigial at this point; it's kept as a placeholder in case you ever
+point something at a cloud provider instead.
 
 ### The knowledge base
 
@@ -59,11 +60,10 @@ tier vs. baggage allowance). `rag_agent.py` retrieves whole files (not
 paragraph chunks) via TF-IDF, `top_k=2`.
 
 That combination — more docs than `top_k` returns, and overlapping topics —
-means retrieval is no longer "return almost everything": some questions
+means retrieval doesn't just "return almost everything": some questions
 retrieve two genuinely relevant docs, others retrieve one relevant doc plus
-one plausible-but-wrong one. That's what makes `ContextualPrecisionMetric` /
-`ContextualRecallMetric` in `test_rag_agent.py` worth writing — there's
-now something for them to actually penalize.
+one plausible-but-wrong one. That gives `ContextualPrecisionMetric` /
+`ContextualRecallMetric` in `test_rag_agent.py` something real to penalize.
 
 Try each agent standalone before you start testing it:
 
@@ -78,13 +78,12 @@ python agents/rag_agent.py
 All three agents (`single_turn_agent.py`, `chatbot.py`, `rag_agent.py`) and
 every judge model in the test files run entirely on local models via
 [Ollama](https://ollama.com) — no API keys, no rate limits, no per-request
-cost. This came out of hitting two real problems while writing the tests
-against Gemini originally:
+cost. Two problems make this worth doing over a cloud provider:
 
 1. **Free-tier rate limits.** Cloud judge models (and the agents' own calls)
-   burned through free-tier quotas fast — Gemini's free tier caps
+   burn through free-tier quotas fast — e.g. Gemini's free tier caps
    `gemini-2.5-flash` at just 20 requests *per day* (and separately, 5 per
-   *minute*), which a handful of pytest runs exhausts immediately.
+   *minute*), which a handful of pytest runs can exhaust immediately.
 2. **Self-evaluation bias.** Using the same model as both the agent
    generating an answer and the judge scoring it risks the judge being blind
    to that model's own failure patterns.
@@ -104,33 +103,34 @@ The fix: two different local models, one per role, both served by Ollama on
   answer_relevancy = AnswerRelevancyMetric(model=judge_model)
   ```
 
-To run it yourself: install [Ollama](https://ollama.com), then pull both
-models and make sure the Ollama server is running (it typically runs as a
-background service after install):
+`test_dataset_eval.py` adds a third role: its `Synthesizer` (which generates
+synthetic goldens from `data/knowledge_base/`) needs its own **embedding**
+model, separate from the generation/judge models — DeepEval defaults that to
+OpenAI too if you don't override it. `nomic-embed-text` fills that role: it's
+a small model purpose-built for embeddings (general chat models like
+`llama3.1:8b` don't support Ollama's embeddings endpoint at all).
+
+To run it yourself: install [Ollama](https://ollama.com), then pull all
+three models and make sure the Ollama server is running (it typically runs
+as a background service after install):
 
 ```bash
 ollama pull qwen2.5-coder:7b
 ollama pull llama3.1:8b
+ollama pull nomic-embed-text
 ```
 
-Since both models are roughly the same size (~5GB each) and a typical 8GB
-GPU can't hold both at once, expect Ollama to swap models in/out of VRAM
-between an agent call and a judge call — a few seconds of overhead per
-swap, not a problem for iterating on tests but worth knowing about if a run
-feels slower than expected.
+Since `qwen2.5-coder:7b` and `llama3.1:8b` are roughly the same size (~5GB
+each) and a typical 8GB GPU can't hold both at once, expect Ollama to swap
+models in/out of VRAM between an agent call and a judge call — a few seconds
+of overhead per swap, not a problem for iterating on tests but worth knowing
+about if a run feels slower than expected.
 
-## How the test files work
-
-Originally, every file under `tests/` was a **skeleton** — numbered comments
-describing one thing to implement, no actual metric/assertion code. That's
-still true for the last two; the first four are fully written:
-
-1. ✅ `test_single_turn_agent.py` — single `LLMTestCase`s, `AnswerRelevancyMetric`, a custom `GEval` metric
-2. ✅ `test_chatbot.py` — `ConversationalTestCase`/`Turn`, `KnowledgeRetentionMetric`, `ConversationCompletenessMetric`, `RoleAdherenceMetric`, a conversational `GEval`
-3. ✅ `test_rag_agent.py` — `retrieval_context` vs. `context`, `FaithfulnessMetric`, `ContextualPrecisionMetric`/`ContextualRecallMetric`, `HallucinationMetric`
-4. ✅ `test_safety.py` — `BiasMetric`, `ToxicityMetric`, `PIILeakageMetric`, and a custom `GEval` for prompt-injection/system-prompt leakage (not PII, since no personal data is involved there)
-5. ⬜ `test_dataset_eval.py` — `Golden`, `EvaluationDataset`, bulk `evaluate()`, and (stretch) the `Synthesizer`
-6. ⬜ `test_tracing.py` — component-level evals via `@observe`, scoring individual steps inside `single_turn_agent.py` (prompt-building vs. the LLM call) instead of only the end-to-end output. Builds on the `LLMTestCase`/`Golden`/`EvaluationDataset` concepts from steps 1 and 5.
+`test_dataset_eval.py`'s `Synthesizer` also pulls in a few extra Python
+packages beyond what the rest of the project uses — `chromadb` (vector store
+for chunking source docs) and `langchain` / `langchain_community` /
+`langchain_text_splitters` (document loading). These are all in
+`requirements.txt`.
 
 ## Running tests
 
@@ -141,8 +141,7 @@ deepeval test run tests/
 ```
 
 Every metric (e.g. `GEval`, `AnswerRelevancyMetric`) uses an LLM as judge.
-All four written test files point their judges at a local Ollama model (see
-above), so runs are free — expect anywhere from ~4s (`.deepeval-cache.json`
-happens to have a matching cached result) to ~50s (fresh evaluation with
-VRAM swapping) per file. For any test file you write against a cloud judge
-model instead, expect a small per-run cost and a few seconds per test case.
+All six test files point their judges at a local Ollama model (see above),
+so runs are free — expect anywhere from ~4s (`.deepeval-cache.json` happens
+to have a matching cached result) to over a minute (fresh evaluation with
+VRAM swapping, or `test_dataset_eval.py`'s synthetic golden generation).

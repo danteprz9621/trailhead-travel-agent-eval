@@ -9,13 +9,17 @@ from deepeval.dataset import EvaluationDataset, Golden
 from deepeval.metrics import AnswerRelevancyMetric, FaithfulnessMetric
 from deepeval.test_case import LLMTestCase
 from deepeval.synthesizer import Synthesizer
+from deepeval.synthesizer.config import ContextConstructionConfig, FiltrationConfig
 from deepeval.models import OllamaModel
+from deepeval.models.embedding_models.ollama_embedding_model import OllamaEmbeddingModel
+from glob import glob
 from agents.single_turn_agent import answer_query
 
 model = OllamaModel(model="llama3.1:8b", base_url="http://localhost:11434")
+embedder = OllamaEmbeddingModel(model="nomic-embed-text", base_url="http://localhost:11434")
 answer_relevancy = AnswerRelevancyMetric(threshold=0.7, model=model)
 faithfulness = FaithfulnessMetric(threshold=0.7, model=model)
-synth = Synthesizer(model=model)
+synth = Synthesizer(model=model, filtration_config=FiltrationConfig(critic_model=model))
 
 goldens = [
     Golden(input="What's the baggage policy?", expected_output="Economy passengers may check one bag up to 23kg free of charge"),
@@ -24,18 +28,25 @@ goldens = [
 
 dataset = EvaluationDataset(goldens=goldens)
 
-for golden in dataset.goldens():
-    actual_output = answer_query(golden)
-    dataset.test_cases.append(LLMTestCase(input=golden, actual_output=actual_output))
+# Hand-written goldens: run each through the agent, collect the results,
+# then batch-evaluate the whole dataset in one evaluate() call.
+def test_evaluation_dataset():
+    for golden in dataset.goldens:
+        actual_output = answer_query(golden.input)
+        dataset.test_cases.append(LLMTestCase(input=golden.input, actual_output=actual_output))
 
-evaluate(test_cases=[dataset.test_cases], metrics=[answer_relevancy, faithfulness])
+    evaluate(test_cases=[dataset.test_cases], metrics=[answer_relevancy, faithfulness])
 
 goldens = synth.generate_goldens_from_docs(
-    documents_paths = ["data/knowledge_base/*.txt"],
+    document_paths = glob("data/knowledge_base/*.txt"),
     include_expected_output = True,
-    max_goldens_per_context = 2
+    max_goldens_per_context = 2,
+    context_construction_config= ContextConstructionConfig(embedder=embedder, critic_model=model)
 )
 
-dataset = EvaluationDataset(goldens=goldens)
-evaluate(test_cases=[dataset.test_cases], metrics=[answer_relevancy, faithfulness])
+# Same idea, but the goldens above came from the Synthesizer instead of
+# being written by hand -- generated straight from data/knowledge_base/.
+def test_synth_evaluation_dataset():
+    dataset = EvaluationDataset(goldens=goldens)
+    evaluate(test_cases=[dataset.test_cases], metrics=[answer_relevancy, faithfulness])
 

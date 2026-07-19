@@ -13,6 +13,7 @@ import ollama
 from deepeval.tracing import observe, update_current_span, update_current_trace
 from deepeval.metrics import AnswerRelevancyMetric, PromptAlignmentMetric
 from deepeval.test_case import LLMTestCase
+from deepeval.models import OllamaModel
 
 SYSTEM_PROMPT = (
     "You are a concise assistant for 'Trailhead Travel', a fictional travel "
@@ -21,8 +22,19 @@ SYSTEM_PROMPT = (
     "politely say it's outside what you can help with."
 )
 
+judge_model = OllamaModel(model="llama3.1:8b", base_url="http://localhost:11434")
 
-@observe(type="tool", name="build_prompt", metrics=[PromptAlignmentMetric])
+prompt_alignment = PromptAlignmentMetric(
+    prompt_instructions=[
+        "Include the Trailhead Travel system persona as the system message.",
+        "Include the user's exact question, unmodified, as the user message.",
+    ],
+    model=judge_model,
+)
+answer_relevancy = AnswerRelevancyMetric(model=judge_model)
+
+
+@observe(type="tool", name="build_prompt", metrics=[prompt_alignment])
 def build_messages(question: str) -> list[dict]:
     """Assemble the system + user messages sent to the LLM."""
     return [
@@ -31,7 +43,7 @@ def build_messages(question: str) -> list[dict]:
     ]
 
 
-@observe(type="llm", name="call_llm", metrics=[AnswerRelevancyMetric])
+@observe(type="llm", name="call_llm", metrics=[answer_relevancy])
 def call_llm(messages: list[dict], model: str = "qwen2.5-coder:7b") -> str:
     """Send the prepared messages to the local Ollama LLM and return its reply."""
     response = ollama.chat(model=model, messages=messages)
