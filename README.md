@@ -1,11 +1,18 @@
-# DeepEval Practice Project: Testing a Single-Turn Agent, a Chatbot, and a RAG Agent
+# Trailhead Travel Agent Eval
 
-A practice project for testing LLM-backed agents with
-[DeepEval](https://deepeval.com). Three tiny "Trailhead Travel" agents (a
-single-turn Q&A agent, a multi-turn chatbot, and a RAG agent) act as fixtures,
-with a DeepEval test suite covering core metrics, conversational metrics,
-RAG metrics, safety/red-teaming, dataset-based evaluation with synthetic
-data, and component-level tracing.
+An LLM quality-engineering suite for **Trailhead Travel**, a fictional
+travel-support company, built to answer a concrete problem: once an LLM
+agent is in front of customers, `assert answer == expected` stops working —
+answers are non-deterministic, "correct" is a spectrum, and a bad answer
+(a wrong refund policy, a hallucinated fee) is a real support liability, not
+just a failed test.
+
+This suite scores three of Trailhead Travel's customer-facing agents (a
+single-turn Q&A agent, a multi-turn support chatbot, and a RAG agent) with
+[DeepEval](https://deepeval.com) instead of exact-match assertions —
+correctness, conversational quality, RAG groundedness, and safety/red-teaming
+metrics, backed by dataset-based evaluation with synthetic data and
+component-level tracing.
 
 Runs fully local and free: every agent and every judge/embedder model is
 served by [Ollama](https://ollama.com) — no API keys, no rate limits, no
@@ -15,7 +22,7 @@ below.
 ## Project structure
 
 ```
-deepeval-capstone/
+trailhead-travel-agent-eval/
 ├── agents/
 │   ├── single_turn_agent.py   # one question in, one answer out; @observe-traced
 │   ├── chatbot.py             # stateful multi-turn chatbot (SupportChatbot)
@@ -38,7 +45,7 @@ deepeval-capstone/
 ## Setup
 
 ```bash
-cd deepeval-capstone
+cd trailhead-travel-agent-eval
 python -m venv .venv
 .venv\Scripts\activate        # Windows
 pip install -r requirements.txt
